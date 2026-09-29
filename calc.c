@@ -1,179 +1,34 @@
 #include "calc.h"
 #include "lista.h"
 #include "str.h"
+#include "dicionario.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <math.h>
+#include <assert.h>
 
-typedef enum{
-    Mais_Menos,
-    Mul_Div,
-    Pot,
-    Abre,
-    Fecha,
-    Igual,
-} Categoria;
 
-typedef enum{
-    Termina,
-    Empilha,
-    Opera,
-    Descarta,
-    Falta_Abrir,
-    Falta_Fechar,
-} Acao;
+// funcoes necessarias para a tokeniza:
 
-static Categoria categoria(Str s){
-    unichar c = s_ch(s, 0);
-    assert(eh_operador(s));
-    switch(c){
-        case '+':
-        case '-':
-            return Mais_Menos;
-        
-        case '*':
-        case '/':
-            return Mul_Div;
-
-        case '^':
-            return Pot;
-
-        case '(':
-            return Abre;
-
-        case ')':
-            return Fecha;
-
-        case '=':
-            return Igual;
-    }
-}
-
-static Acao decide(Categoria topo, Categoria entrada){
-    switch(topo){
-        case Mais_Menos:
-            switch(entrada){
-                case Mais_Menos:
-                    return Opera;
-
-                case Mul_Div:
-                    return Empilha;
-                    
-                case Pot:
-                    return Empilha;
-
-                case Abre:
-                    return Empilha;
-
-                case Fecha:
-                    return Opera;
-
-                case Igual:
-                    return Empilha;
-            }
-
-        case Mul_Div:
-            switch(entrada){
-                case Mais_Menos:
-                    return Opera;
-
-                case Mul_Div:
-                    return Opera;
-
-                case Pot:
-                    return Empilha;
-
-                case Abre:
-                    return Empilha;
-
-                case Fecha:
-                    return Opera;
-
-                case Igual:
-                    return Empilha;
-            }
-
-        case Pot:
-            switch(entrada){
-                case Mais_Menos:
-                    return Opera;
-
-                case Mul_Div:
-                    return Opera;
-
-                case Pot:
-                    return Opera;
-
-                case Abre:
-                    return Empilha;
-
-                case Fecha:
-                    return Opera;
-
-                case Igual:
-                    return Empilha;
-            }
-
-        case Abre:
-            switch(entrada){
-                case Mais_Menos:
-                    return Empilha;
-
-                case Mul_Div:
-                    return Empilha;
-
-                case Pot:
-                    return Empilha;
-
-                case Abre:
-                    return Empilha;
-
-                case Fecha:
-                    return Descarta;
-
-                case Igual:
-                    return Empilha;
-            }
-
-        case Igual:
-            switch(entrada){
-                case Mais_Menos:
-                    return Empilha;
-
-                case Mul_Div:
-                    return Empilha;
-
-                case Pot:
-                    return Empilha;
-
-                case Abre:
-                    return Empilha;
-
-                case Fecha:
-                    return Opera;
-            }
-    }
-}
-
-bool eh_espaco(unichar c){
+static bool eh_espaco(unichar c){
     if(c == ' ' || c == '\t' || c == '\n') return true;
     return false;
 }
 
-bool eh_digito(unichar c){
+static bool eh_digito(unichar c){
     if((c >= '0' && c <= '9') || c == '.') return true;
     return false;
 }
 
-bool eh_caractere(unichar c){
+static bool eh_caractere(unichar c){
     if((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '$' || c == '_') return true;
     return false;
 }
 
-bool eh_continuacao(unichar c){
+static bool eh_continuacao(unichar c){
     if(eh_caractere(c) || (c >= '0' && c <= '9')) return true;
-    return false;
 }
 
 Lista tokeniza(Str txt){
@@ -194,10 +49,17 @@ Lista tokeniza(Str txt){
             while(i < tam && eh_continuacao(s_ch(txt, i))) i++;
         }
         else i++;
-        l_insere_fim(token, s_cria_substring(txt, ini, i - ini));
+        l_insere(token, s_cria_substring(txt, ini, i - ini));
     }
     return token;
 }
+
+
+// funcoes necessarias para a calculadora:
+
+
+// apartir daq vc vai ver mtas recebendo a Str, e dps convertendo pra unichar
+// fiz isso pra ficar mais comodo quando eu chamar elas na calculadora
 
 static bool eh_operador(Str s){
     unichar c = s_ch(s, 0);
@@ -207,44 +69,122 @@ static bool eh_operador(Str s){
 
 static bool eh_operando(Str s){
     unichar c = s_ch(s, 0);
-    bool digito_ponto = (c >= '0' && c <= '9') || c == '.';
-    bool letra_cifrao = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '$';
-    return digito_ponto || letra_cifrao;
+    bool digito = (c >= '0' && c <= '9') || c == '.';
+    bool letra = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '$';
+    return digito || letra;
 }
 
-
 static bool eh_parentesis_aberto(Str s){
-    assert(s_tam(s) > 0);
     unichar c = s_ch(s, 0);
     if(c == '(') return true;
     return false;
 }
 
 static bool eh_parentesis_fechado(Str s){
-    assert(s_tam(s) > 0);
     unichar c = s_ch(s, 0);
     if(c == ')') return true;
     return false;
 }
 
-Str calculadora(Str expressao){
-    Lista operadores = l_cria();
-    bool par_aberto = false;
-    Lista operandos = l_cria();
-    Lista tokens = tokeniza(expressao);
-    while(!l_vazia(tokens)){
-        Str s = l_remove(tokens);
-        if(eh_operador(s)){
-            if(eh_parentesis_aberto(s)){
-                par_aberto = true;
-                l_empilha(operadores, s);
-            } 
-            else if(eh_parentesis_fechado(s)){
-                if(!par_aberto)
+static bool eh_variavel(Str s){
+    unichar c = s_ch(s, 0);
+    if((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '$') return true;
+    return false;
+}
+
+
+// tabela:
+
+typedef enum{
+    Mais_Menos,
+    Mul_Div,
+    Pot,
+    Abre,
+    Fecha,
+    Igual,
+} Categoria;
+
+typedef enum{
+    Empilha,
+    Opera,
+    Descarta,
+} Acao;
+
+static Categoria categoria(Str s){
+    assert(eh_operador(s));
+    unichar c = s_ch(s, 0);
+    switch(c){
+        case '+':
+        case '-':
+            return Mais_Menos;
+
+        case '*':
+        case '/':
+            return Mul_Div;
+
+        case '^':
+            return Pot;
+
+        case '(':
+            return Abre;
+
+        case ')':
+            return Fecha;
+
+        case '=':
+            return Igual;
+    }
+}
+
+static Acao decide(Categoria topo, Categoria novo){
+    switch(topo){
+        case Mais_Menos:
+            switch(novo){
+                case Mais_Menos: return Opera;
+                case Mul_Div: return Empilha;
+                case Pot: return Empilha;
+                case Abre: return Empilha;
+                case Fecha: return Opera;
+                case Igual: return Empilha;
             }
-        }
-        else if(eh_operando){
-            l_empilha(operandos, s);
-        }
+
+        case Mul_Div:
+            switch(novo){
+                case Mais_Menos: return Opera;
+                case Mul_Div: return Opera;
+                case Pot: return Empilha;
+                case Abre: return Empilha;
+                case Fecha: return Opera;
+                case Igual: return Empilha;
+            }
+
+        case Pot:
+            switch(novo){
+                case Mais_Menos: return Opera;
+                case Mul_Div: return Opera;
+                case Pot: return Opera;
+                case Abre: return Empilha;
+                case Fecha: return Opera;
+                case Igual: return Empilha;
+            }
+
+        case Abre:
+            switch(novo){
+                case Mais_Menos: return Empilha;
+                case Mul_Div: return Empilha;
+                case Pot: return Empilha;
+                case Fecha: return Descarta;
+                case Igual: return Empilha;
+            }
+
+        case Igual:
+            switch(novo){
+                case Mais_Menos: return Empilha;
+                case Mul_Div: return Empilha;
+                case Pot: return Empilha;
+                case Abre: return Empilha;
+                case Fecha: return Opera;
+                case Igual: return Empilha;
+            }
     }
 }
