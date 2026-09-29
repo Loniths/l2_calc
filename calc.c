@@ -6,6 +6,156 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+typedef enum{
+    Mais_Menos,
+    Mul_Div,
+    Pot,
+    Abre,
+    Fecha,
+    Igual,
+} Categoria;
+
+typedef enum{
+    Termina,
+    Empilha,
+    Opera,
+    Descarta,
+    Falta_Abrir,
+    Falta_Fechar,
+} Acao;
+
+static Categoria categoria(Str s){
+    unichar c = s_ch(s, 0);
+    assert(eh_operador(s));
+    switch(c){
+        case '+':
+        case '-':
+            return Mais_Menos;
+        
+        case '*':
+        case '/':
+            return Mul_Div;
+
+        case '^':
+            return Pot;
+
+        case '(':
+            return Abre;
+
+        case ')':
+            return Fecha;
+
+        case '=':
+            return Igual;
+    }
+}
+
+static Acao decide(Categoria topo, Categoria entrada){
+    switch(topo){
+        case Mais_Menos:
+            switch(entrada){
+                case Mais_Menos:
+                    return Opera;
+
+                case Mul_Div:
+                    return Empilha;
+                    
+                case Pot:
+                    return Empilha;
+
+                case Abre:
+                    return Empilha;
+
+                case Fecha:
+                    return Opera;
+
+                case Igual:
+                    return Empilha;
+            }
+
+        case Mul_Div:
+            switch(entrada){
+                case Mais_Menos:
+                    return Opera;
+
+                case Mul_Div:
+                    return Opera;
+
+                case Pot:
+                    return Empilha;
+
+                case Abre:
+                    return Empilha;
+
+                case Fecha:
+                    return Opera;
+
+                case Igual:
+                    return Empilha;
+            }
+
+        case Pot:
+            switch(entrada){
+                case Mais_Menos:
+                    return Opera;
+
+                case Mul_Div:
+                    return Opera;
+
+                case Pot:
+                    return Opera;
+
+                case Abre:
+                    return Empilha;
+
+                case Fecha:
+                    return Opera;
+
+                case Igual:
+                    return Empilha;
+            }
+
+        case Abre:
+            switch(entrada){
+                case Mais_Menos:
+                    return Empilha;
+
+                case Mul_Div:
+                    return Empilha;
+
+                case Pot:
+                    return Empilha;
+
+                case Abre:
+                    return Empilha;
+
+                case Fecha:
+                    return Descarta;
+
+                case Igual:
+                    return Empilha;
+            }
+
+        case Igual:
+            switch(entrada){
+                case Mais_Menos:
+                    return Empilha;
+
+                case Mul_Div:
+                    return Empilha;
+
+                case Pot:
+                    return Empilha;
+
+                case Abre:
+                    return Empilha;
+
+                case Fecha:
+                    return Opera;
+            }
+    }
+}
+
 bool eh_espaco(unichar c){
     if(c == ' ' || c == '\t' || c == '\n') return true;
     return false;
@@ -22,7 +172,7 @@ bool eh_caractere(unichar c){
 }
 
 bool eh_continuacao(unichar c){
-    if(eh_caractere || (c >= '0' && c <= '9')) return true;
+    if(eh_caractere(c) || (c >= '0' && c <= '9')) return true;
     return false;
 }
 
@@ -50,37 +200,18 @@ Lista tokeniza(Str txt){
 }
 
 static bool eh_operador(Str s){
-    unichar c = s_ch(s, 0)
+    unichar c = s_ch(s, 0);
     if(c == '+' || c == '-' || c == '*' || c == '/' || c == '(' || c == ')' || c == '=') return true;
     return false;
 }
 
 static bool eh_operando(Str s){
-    int tam = s_tam(s);
     unichar c = s_ch(s, 0);
-    if(tam > 1){
-        if((c >= '0' && c <= '9') && s_ch(s, 1) == '.') return true;
-    }
-    else{
-        if(c >= '0' && c <= '9') return true;
-    }
-    return false;
+    bool digito_ponto = (c >= '0' && c <= '9') || c == '.';
+    bool letra_cifrao = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '$';
+    return digito_ponto || letra_cifrao;
 }
 
-static int precedencia(Str s){
-    assert(s_tam(s) > 0);
-    unichar c = s_ch(s, 0);
-    switch(c){
-        case '+':
-        case '-':
-            return 1;
-        
-        case '*':
-        case '/': return 2;
-
-        default: return 0;
-    }
-}
 
 static bool eh_parentesis_aberto(Str s){
     assert(s_tam(s) > 0);
@@ -91,7 +222,7 @@ static bool eh_parentesis_aberto(Str s){
 
 static bool eh_parentesis_fechado(Str s){
     assert(s_tam(s) > 0);
-    unichar c - s_ch(s, 0);
+    unichar c = s_ch(s, 0);
     if(c == ')') return true;
     return false;
 }
@@ -102,7 +233,7 @@ Str calculadora(Str expressao){
     Lista operandos = l_cria();
     Lista tokens = tokeniza(expressao);
     while(!l_vazia(tokens)){
-        Str s = l_desempilha(tokens);
+        Str s = l_remove(tokens);
         if(eh_operador(s)){
             if(eh_parentesis_aberto(s)){
                 par_aberto = true;
