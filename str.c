@@ -320,7 +320,7 @@ void s_substitui(Str s, int pos, int tam, Str_c sb)
     novo_espaco = prox_pot_2(novos_bytes);
     nova = malloc(novo_espaco);
     assert(nova != NULL);
-    memcpy(nova, s->string, bytes_antes);
+    if(bytes_antes > 0) memcpy(nova, s->string, bytes_antes);
     if(sb->espaco_usado > 0){
       memcpy(nova + bytes_antes, sb->string, sb->espaco_usado);
     }
