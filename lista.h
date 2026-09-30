@@ -1,99 +1,166 @@
-// lista.h
-#ifndef LISTA_H
-#define LISTA_H
-
-// lista inclui str e str inclui lista. define o tipo Lista antes das inclusões.
-// TAD de uma lista
-typedef struct lista *Lista;
-typedef struct no *No;
-
 #include "str.h"
+#include "lista.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <stdbool.h>
+#include <assert.h>
 
-// o tipo dos dados mantidos pela lista
-typedef Str dado_t;
+typedef struct no *No;
+struct no{
+    dado_t dado;
+    No prox;
+    No ant;
+};
 
-// cria e inicializa uma lista vazia
-Lista l_cria();
+struct lista{
+    int tam;
+    No sent;
+};
 
-// cria uma lista contendo substrings de s
-// as substrings são separadas por quaisquer caractere de sep
-// os caracteres de sep não aparecem nas substrings
-// exemplos:
-//   "a,ba,ca, te", ", " -> ["a" "ba" "ca" "te"]
-//   "aba \ncate\n", "\n" -> ["aba " "cate"]
-Lista l_cria_separando(Str s, Str sep);
+static No no_cria(){
+    No novo = malloc(sizeof(struct no));
+    assert(novo != NULL);
+    return novo;
+}
 
-// libera a memória ocupada por uma lista
-void l_destroi(Lista l);
+Lista l_cria(){
+    Lista l = malloc(sizeof(struct lista));
+    assert(l != NULL);
+    l->sent = no_cria();
+    l->sent->prox = l->sent;
+    l->sent->ant = l->sent;
+    l->sent->dado = NULL;
+    l->tam = 0;
+    return l;
+}
 
-// retorna o número de elementos na lista
-int l_tam(Lista l);
+int l_tam(Lista l){
+    return l->tam;
+}
 
-// retorna true se a lista tiver cheia
-bool l_cheia(Lista l);
+bool l_vazia(Lista l){
+    return l->sent->prox == l->sent;
+}
 
-// retorna true se a lista tiver vazia
-bool l_vazia(Lista l);
+bool l_cheia(Lista l){
+    return false;
+}
 
-// imprime os dados que estão na lista
-void l_imprime(Lista l);
+void l_imprime(Lista l){
+    No guia = l->sent->prox;
+    for(int i = 0; i < l->tam; i++){
+        if(i > 0) putchar(' ');
+        putchar('[');
+        s_imprime(guia->dado);
+        putchar(']');
+        guia = guia->prox;
+    }
+}
 
-// insere o dado d no início da lista l
-void l_insere_inicio(Lista l, dado_t d);
+void l_insere_pos(Lista l, dado_t dado, int pos){
+    assert(pos >= 0 && pos <= l->tam);
+    No proximo = l->sent->prox;
+    for(int i = 0; i < pos; i++) proximo = proximo->prox;
+    No novo = no_cria();
+    novo->dado = dado;
+    novo->prox = proximo;
+    novo->ant = proximo->ant;
+    proximo->ant->prox = novo;
+    proximo->ant = novo;
+    l->tam++;
+}
 
-// insere o dado d no final da lista l
-void l_insere_fim(Lista l, dado_t d);
+dado_t l_dado_pos(Lista l, int pos){
+    assert(pos >= 0 && pos < l->tam);
+    No guia = l->sent->prox;
+    for(int i = 0; i < pos; i++){
+        guia = guia->prox;
+    }
+    return guia->dado;
+}
 
-// insere o dado d na lista l, de forma que ele fique na posição p
-// a primeira posição é 0
-void l_insere_pos(Lista l, dado_t d, int p);
+dado_t l_remove_pos(Lista l, int pos){
+    assert(pos >= 0 && pos < l->tam);
+    No removido = l->sent->prox;
+    for(int i = 0; i < pos; i++) removido = removido->prox;
+    removido->ant->prox = removido->prox;
+    removido->prox->ant = removido->ant;
+    dado_t dado = removido->dado;
+    free(removido);
+    l->tam--;
+    return dado;
+}
 
-// retorna o dado no início da lista
-dado_t l_dado_inicio(Lista l);
+void l_insere_inicio(Lista l, dado_t dado){
+    l_insere_pos(l, dado, 0);
+}
 
-// retorna o dado no final da lista
-dado_t l_dado_fim(Lista l);
+void l_insere_fim(Lista l, dado_t dado){
+    l_insere_pos(l, dado, l->tam);
+}
 
-// retorna o dado na posição pos da lista
-dado_t l_dado_pos(Lista l, int pos);
+dado_t l_dado_inicio(Lista l){
+    return l_dado_pos(l, 0);
+}
 
-// remove e retorna o dado no início da lista
-dado_t l_remove_inicio(Lista l);
+dado_t l_dado_fim(Lista l){
+    return l_dado_pos(l, l->tam - 1);
+}
 
-// remove e retorna o dado no final da lista
-dado_t l_remove_fim(Lista l);
+dado_t l_remove_inicio(Lista l){
+    return l_remove_pos(l, 0);
+}
 
-// remove e retorna o dado na posição pos da lista
-dado_t l_remove_pos(Lista l, int pos);
+dado_t l_remove_fim(Lista l){
+    return l_remove_pos(l, l->tam - 1);
+}
 
+dado_t l_primeiro(Lista l){
+    return l_dado_inicio(l);
+}
 
-// funções para usar a lista como uma fila
+void l_insere(Lista l, dado_t dado){
+    l_insere_fim(l, dado);
+}
 
-// l_cria, l_destroi, l_vazia
+dado_t l_remove(Lista l){
+    return l_remove_inicio(l);
+}
 
-// retorna o dado que está no início da fila
-dado_t l_primeiro(Lista l);
+dado_t l_topo(Lista l){
+    return l_dado_inicio(l);
+}
 
-// insere um dado no fim da fila
-void l_insere(Lista l, dado_t d);
+void l_empilha(Lista l, dado_t dado){
+    l_insere_inicio(l, dado);
+}
 
-// remove e retorna o dado que está no início da fila
-dado_t l_remove(Lista l);
+dado_t l_desempilha(Lista l){
+    return l_remove_inicio(l);
+}
 
+Lista l_cria_separando(Str s, Str sep){
+    Lista l = l_cria();
+    int n = s_tam(s);
+    int pos = 0;
+    while(pos < n){
+        int ini = s_busca_nc(s, pos, sep);
+        if(ini == -1) break;
+        int fim = s_busca_c(s, ini, sep);
+        if(fim == -1) break;
+        l_insere_fim(l, s_cria_substring(s, ini, fim - ini));
+        pos = fim;
+    }
+    return l;
+}
 
-// funções para usar a lista como uma pilha
-
-// l_cria, l_destroi, l_vazia
-
-// retorna o dado que está no topo da pilha
-dado_t l_topo(Lista l);
-
-// empilha um dado no topo da pilha
-void l_empilha(Lista l, dado_t d);
-
-// remove e retorna o dado que está no topo da pilha
-dado_t l_desempilha(Lista l);
-
-#endif // LISTA_H
+void l_destroi(Lista l){
+    while(!l_vazia(l)){
+        dado_t temp = l_remove(l);
+        s_destroi(temp);
+    }
+    free(l->sent);
+    free(l);
+}
