@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <math.h>
 #include <assert.h>
+#include <string.h>
 
 
 // funcoes necessarias para a tokeniza:
@@ -29,6 +30,7 @@ static bool eh_caractere(unichar c){
 
 static bool eh_continuacao(unichar c){
     if(eh_caractere(c) || (c >= '0' && c <= '9')) return true;
+    return false;
 }
 
 Lista tokeniza(Str txt){
@@ -63,7 +65,7 @@ Lista tokeniza(Str txt){
 
 static bool eh_operador(Str s){
     unichar c = s_ch(s, 0);
-    if(c == '+' || c == '-' || c == '*' || c == '/' || c == '(' || c == ')' || c == '=') return true;
+    if(c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == '(' || c == ')' || c == '=') return true;
     return false;
 }
 
@@ -173,6 +175,7 @@ static Acao decide(Categoria topo, Categoria novo){
                 case Mais_Menos: return Empilha;
                 case Mul_Div: return Empilha;
                 case Pot: return Empilha;
+                case Abre: return Empilha;
                 case Fecha: return Descarta;
                 case Igual: return Empilha;
             }
@@ -187,4 +190,246 @@ static Acao decide(Categoria topo, Categoria novo){
                 case Igual: return Empilha;
             }
     }
+}
+
+// func do dicionario
+
+static Dicionário variaveis = NULL;
+
+static bool chave_igual(chave_t a, chave_t b){
+    if(strcmp((char *)a, (char *)b) == 0) return true;
+    return false;
+}
+
+static bool chave_menor(chave_t a, chave_t b){
+    if(strcmp((char *)a, (char *)b) < 0) return true;
+    return false;
+}
+
+static Dicionário cria_variaveis(){
+    if(variaveis == NULL) variaveis = dic_cria(chave_menor, chave_igual);
+    return variaveis;
+}
+
+static void atualiza_variavel(Dicionário dic, Str chave, Str valor){
+    char *chave_nova = s_strc(chave);
+    char *valor_novo = s_strc(valor);
+    valor_t anterior = dic_busca(dic, chave_nova);
+    dic_insere(dic, chave_nova, valor_novo);
+    if(anterior != VALOR_NÃO_EXISTE){
+        free(chave_nova);
+        free(anterior);
+    }
+}
+
+static char *busca_variavel(Dicionário dic, Str busca){
+    char *chave = s_strc(busca);
+    valor_t v = dic_busca(dic, chave);
+    free(chave);
+    return (char *)v;
+}
+
+static bool obtem_valor(Str operando, Dicionário dic, double *valor, Str *erro){
+    unichar c = s_ch(operando, 0);
+    if(eh_digito(c)){
+        *valor = s_número(operando);
+        return true;
+    }
+    char *v = busca_variavel(dic, operando);
+    if(v == NULL){
+        *erro = s_cria("#ERRO variável indefinída");
+        return false;
+    }
+    Str valor_str = s_cria(v);
+    *valor = s_número(valor_str);
+    s_destroi(valor_str);
+    return true;
+}
+
+// operacoes
+
+static bool opera_igual(Lista operandos, Dicionário dic, Str *erro){
+    if(l_tam(operandos) < 2){
+        *erro = s_cria("#ERRO faltam operandos para =");
+        return false;
+    }
+    Str valor_token = l_desempilha(operandos);
+    Str chave_token = l_desempilha(operandos);
+    if(!eh_variavel(chave_token)){
+        *erro = s_cria("#ERRO lado esquerdo do = não contém variável");
+        s_destroi(valor_token);
+        s_destroi(chave_token);
+        return false;
+    }
+    double valor_num;
+    if(!obtem_valor(valor_token, dic, &valor_num, erro)){
+        s_destroi(valor_token);
+        s_destroi(chave_token);
+        return false;
+    }
+    Str valor_str = s_cria_número(valor_num);
+    atualiza_variavel(dic, chave_token, valor_str);
+    l_empilha(operandos, valor_str);
+    s_destroi(valor_token);
+    s_destroi(chave_token);
+    return true;
+}
+
+static bool opera(Str operador, Lista operandos, Dicionário dic, Str *erro){
+    unichar c = s_ch(operador, 0);
+    if(c == '='){
+        return opera_igual(operandos, dic, erro);
+    }
+    if(l_tam(operandos) < 2){
+        *erro = s_cria("#ERRO faltam operandos");
+        return false;
+    }
+    Str b_token = l_desempilha(operandos);
+    Str a_token = l_desempilha(operandos);
+    double a, b;
+    bool ok = obtem_valor(a_token, dic, &a, erro);
+    if(ok) ok = obtem_valor(b_token, dic, &b, erro);
+    double r = 0;
+    if(ok){
+        switch(c){
+            case '+': 
+                r = a + b;
+                break;
+
+            case '-': 
+                r = a - b;
+                break;
+
+            case '*':
+                r = a * b;
+                break;
+
+            case '/':
+                if(b == 0){
+                    *erro = s_cria("#ERRO imposível dividir por zero");
+                    ok = false;
+                }
+                else r = a / b;
+                break;
+            
+            case '^':
+                r = pow(a, b);
+                break;
+
+            default:
+                *erro = s_cria("#ERRO operação invalida");
+                ok = false;
+                break;
+        }
+    }
+    s_destroi(a_token);
+    s_destroi(b_token);
+    if(!ok) return false;
+    l_empilha(operandos, s_cria_número(r));
+    return true;
+}
+
+Str calculadora(Str expressao){
+    Dicionário variaveis = cria_variaveis();
+    Lista tokens = tokeniza(expressao);
+    Lista operadores = l_cria();
+    Lista operandos = l_cria();
+    Str erro = NULL;
+    Str token_atual = NULL;
+    bool tem_token = false;
+    bool fim_entrada = false;
+    while(erro == NULL){
+        if(!tem_token){
+            if(l_vazia(tokens)){
+                fim_entrada = true;
+                token_atual = NULL;
+            }
+            else{
+                token_atual = l_remove(tokens);
+                fim_entrada = false;
+            }
+            tem_token = true;
+        }
+        if(!fim_entrada && eh_operando(token_atual)){
+            l_empilha(operandos, token_atual);
+            tem_token = false;
+            continue;
+        }
+        if(!fim_entrada && !eh_operador(token_atual)){
+            erro = s_cria("#ERRO token inválido");
+            s_destroi(token_atual);
+            break;
+        }
+        bool pilha_vazia = l_vazia(operadores);
+        if(pilha_vazia && fim_entrada){
+            break;
+        }
+        if(pilha_vazia){
+            if(eh_parentesis_fechado(token_atual)){
+                erro = s_cria("#ERRO falta (");
+                s_destroi(token_atual);
+                break;
+            }
+            l_empilha(operadores, token_atual);
+            tem_token = false;
+            continue;
+        }
+        if(fim_entrada){
+            Str topo = l_topo(operadores);
+            if(eh_parentesis_aberto(topo)){
+                erro = s_cria("#ERRO falta )");
+                break;
+            }
+            Str op = l_desempilha(operadores);
+            bool ok = opera(op, operandos, variaveis, &erro);
+            s_destroi(op);
+            if(!ok) break;
+            continue;
+        }
+        Categoria topo = categoria(l_topo(operadores));
+        Categoria entrada = categoria(token_atual);
+        Acao acao = decide(topo, entrada);
+        if(acao == Empilha){
+            l_empilha(operadores, token_atual);
+            tem_token = false;
+        }
+        else if(acao == Descarta){
+            Str descartar = l_desempilha(operadores);
+            s_destroi(descartar);
+            s_destroi(token_atual);
+            tem_token = false;
+        }
+        else{
+            Str op = l_desempilha(operadores);
+            bool ok = opera(op, operandos, variaveis, &erro);
+            s_destroi(op);
+            if(!ok){
+                s_destroi(token_atual);
+                break;
+            }
+        }
+    }
+    Str resultado;
+    if(erro != NULL){
+        resultado = erro;
+    }
+    else if(l_tam(operandos) != 1){
+        resultado = s_cria("#ERRO inválido");
+    }
+    else{
+        Str sobrou = l_desempilha(operandos);
+        double valor;
+        Str erro_final = NULL;
+        if(obtem_valor(sobrou, variaveis, &valor, &erro_final)){
+            resultado = s_cria_número(valor);
+        }
+        else{
+            resultado = erro_final;
+        }
+        s_destroi(sobrou);
+    }
+    l_destroi(tokens);
+    l_destroi(operadores);
+    l_destroi(operandos);
+    return resultado;
 }
