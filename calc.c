@@ -433,3 +433,16 @@ Str calculadora(Str expressao){
     l_destroi(operandos);
     return resultado;
 }
+
+static void libera_tupla(chave_t chave, valor_t valor){
+    free(chave);
+    free(valor);
+}
+
+void calc_destroi_dicionario(){
+    if(variaveis != NULL){
+        dic_para_todos(variaveis, libera_tupla);
+        dic_destroi(variaveis);
+        variaveis = NULL;
+    }
+}
