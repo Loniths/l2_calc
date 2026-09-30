@@ -25,4 +25,6 @@ Str calculadora(Str expressao);
 // "92+a ba 3b3 ** *  " -> ["92" "+" "a" "ba" "3" "b3" "*" "*" "*"]
 Lista tokeniza(Str txt);
 
+void calc_destroi_dicionario();
+
 #endif // CALC_H
